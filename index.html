@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Ege Kaçamağı — Türkiye Yol Gezisi Planlayıcı</title>
+
+<!-- ✅ Leaflet CSS — head içinde yükleniyor -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+
+<style>
+/* =============================================
+   CSS DEĞİŞKENLERİ & RESET
+   ============================================= */
+:root {
+  --navy:         #0d1b2a;
+  --navy-mid:     #1a2d42;
+  --navy-light:   #253d56;
+  --cream:        #f5efe6;
+  --cream-dark:   #e8ddd0;
+  --gold:         #c9a84c;
+  --gold-light:   #e2c47a;
+  --gold-pale:    #f0dfa0;
+  --text-main:    #f0e9df;
+  --text-dim:     #a0b0c0;
+  --glass-bg:     rgba(255,255,255,0.06);
+  --glass-border: rgba(201,168,76,0.2);
+  --shadow-gold:  0 4px 30px rgba(201,168,76,0.12);
+  --shadow-deep:  0 20px 60px rgba(0,0,0,0.4);
+  --radius-lg:    20px;
+  --radius-md:    12px;
+  --radius-sm:    8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--navy);
+  color: var(--text-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 10%, rgba(201,168,76,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(13,27,42,0.9) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* =============================================
+   HEADER
+   ============================================= */
+.header {
+  position: relative;
+  z-index: 10;
+  padding: 48px 40px 40px;
+  background: linear-gradient(180deg, rgba(13,27,42,0.98) 0%, rgba(13,27,42,0.7) 100%);
+  border-bottom: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.trip-label {
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.trip-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(38px, 6vw, 72px);
+  font-weight: 300;
+  line-height: 1;
+  color: var(--cream);
+  letter-spacing: -1px;
+}
+.trip-title em { font-style: italic; color: var(--gold-light); }
+.trip-subtitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(14px, 2vw, 18px);
+  font-style: italic;
+  color: var(--text-dim);
+  margin-top: 8px;
+  letter-spacing: 0.5px;
+}
+.trip-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.meta-pill {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 100px;
+  padding: 8px 18px;
+  font-size: 13px;
+  color: var(--text-main);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+}
+.meta-pill:hover { border-color: var(--gold); background: rgba(201,168,76,0.1); }
+.meta-pill span { color: var(--gold); font-size: 15px; }
+.summary-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.summary-item { display: flex; flex-direction: column; gap: 4px; }
+.summary-item .s-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-dim); }
+.summary-item .s-value { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 400; color: var(--cream); }
+.summary-item .s-value em { font-style: italic; color: var(--gold-light); font-size: 16px; }
+
+/* =============================================
+   ANA DÜZEN
+   ============================================= */
+.main-layout {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 0;
+  min-height: calc(100vh - 200px);
+}
+@media (max-width: 1100px) { .main-layout { grid-template-columns: 1fr; } }
+
+/* =============================================
+   HARİTA
+   ============================================= */
+.map-section { position: relative; min-height: 620px; }
+
+/* ✅ Harita için net yükseklik zorunludur */
+#map {
+  width: 100%;
+  height: 100vh;
+  min-height: 620px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Leaflet tema geçersiz kılma */
+.leaflet-container { background: #162433 !important; font-family: 'DM Sans', sans-serif !important; }
+.leaflet-popup-content-wrapper {
+  background: rgba(13,27,42,0.97) !important;
+  border: 1px solid var(--gold) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--text-main) !important;
+  box-shadow: var(--shadow-gold) !important;
+  padding: 0 !important;
+  overflow: hidden;
+  max-width: 270px;
+  backdrop-filter: blur(20px);
+}
+.leaflet-popup-content { margin: 0 !important; }
+.leaflet-popup-tip { background: var(--gold) !important; }
+.leaflet-popup-close-button { color: var(--gold) !important; font-size: 18px !important; top: 10px !important; right: 10px !important; z-index: 10; }
+
+.popup-inner { padding: 20px; }
+.popup-emoji { font-size: 32px; margin-bottom: 10px; display: block; }
+.popup-type { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 6px; }
+.popup-name { font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 600; color: var(--cream); margin-bottom: 8px; line-height: 1.2; }
+.popup-why { font-size: 12px; color: var(--text-dim); line-height: 1.6; margin-bottom: 10px; }
+.popup-time { display: inline-flex; align-items: center; gap: 5px; background: rgba(201,168,76,0.15); border: 1px solid rgba(201,168,76,0.3); border-radius: 100px; padding: 4px 12px; font-size: 11px; color: var(--gold-light); }
+
+.map-legend {
+  position: absolute;
+  bottom: 20px; left: 20px;
+  z-index: 999;
+  background: rgba(13,27,42,0.92);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  backdrop-filter: blur(20px);
+  display: flex; flex-direction: column; gap: 7px;
+}
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-dim); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid currentColor; flex-shrink: 0; }
+
+.route-status {
+  position: absolute;
+  top: 16px; right: 16px;
+  z-index: 999;
+  background: rgba(13,27,42,0.9);
+  border: 1px solid var(--gold);
+  border-radius: 100px;
+  padding: 8px 16px;
+  font-size: 11px; color: var(--gold);
+  letter-spacing: 2px; text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+  backdrop-filter: blur(10px);
+}
+.route-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); animation: blink 1.5s ease infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* =============================================
+   KENAR ÇUBUĞU
+   ============================================= */
+.sidebar {
+  background: rgba(13,27,42,0.97);
+  border-left: 1px solid var(--glass-border);
+  overflow-y: auto;
+  max-height: 100vh;
+  position: sticky;
+  top: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold) transparent;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 2px; }
+
+.sidebar-nav {
+  display: flex;
+  border-bottom: 1px solid var(--glass-border);
+  position: sticky; top: 0;
+  background: rgba(13,27,42,0.99);
+  z-index: 10;
+  backdrop-filter: blur(10px);
+}
+.nav-tab {
+  flex: 1; padding: 14px 6px;
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--text-dim); background: none; border: none;
+  cursor: pointer; transition: all 0.3s ease;
+  border-bottom: 2px solid transparent;
+  font-family: 'DM Sans', sans-serif;
+}
+.nav-tab.active, .nav-tab:hover { color: var(--gold); border-bottom-color: var(--gold); }
+.tab-panel { display: none; padding: 24px; }
+.tab-panel.active { display: block; }
+.panel-title { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 300; color: var(--cream); margin-bottom: 4px; font-style: italic; }
+.panel-sub { font-size: 11px; color: var(--text-dim); margin-bottom: 20px; letter-spacing: 1px; }
+
+/* =============================================
+   GÜN KARTLARI
+   ============================================= */
+.day-card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); margin-bottom: 20px; overflow: hidden; transition: all 0.4s ease; animation: fadeSlideUp 0.6s ease both; }
+.day-card:nth-child(2){animation-delay:.1s}
+.day-card:nth-child(3){animation-delay:.2s}
+@keyframes fadeSlideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+.day-card:hover { border-color: var(--gold); box-shadow: var(--shadow-gold); transform: translateY(-2px); }
+
+.day-header { background: linear-gradient(135deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.05) 100%); padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--glass-border); cursor: pointer; }
+.day-number { font-family: 'Cormorant Garamond', serif; font-size: 36px; font-weight: 300; color: var(--gold); line-height: 1; }
+.day-info { flex: 1; padding: 0 16px; }
+.day-date { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px; }
+.day-route { font-family: 'Cormorant Garamond', serif; font-size: 16px; color: var(--cream); font-style: italic; }
+.day-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.stat-item { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 4px; }
+.stat-item strong { color: var(--gold-light); }
+.day-body { padding: 20px; }
+
+.section-label { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 10px; margin-top: 16px; display: flex; align-items: center; gap: 8px; }
+.section-label::after { content: ''; flex: 1; height: 1px; background: linear-gradient(to right, var(--glass-border), transparent); }
+
+.stop-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.stop-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.03); border: 1px solid transparent; transition: all 0.3s ease; cursor: pointer; }
+.stop-item:hover { background: rgba(201,168,76,0.08); border-color: rgba(201,168,76,0.2); }
+.stop-emoji { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.stop-name { font-size: 13px; font-weight: 500; color: var(--cream); margin-bottom: 3px; }
+.stop-desc { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+
+.food-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.food-chip { background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.25); border-radius: 100px; padding: 5px 12px; font-size: 11px; color: var(--gold-light); display: flex; align-items: center; gap: 5px; transition: all 0.3s; }
+.food-chip:hover { background: rgba(201,168,76,0.2); }
+
+.hotel-suggestion { background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); border-radius: var(--radius-sm); padding: 12px; display: flex; align-items: center; gap: 10px; }
+.hotel-icon { font-size: 22px; }
+.hotel-name { font-size: 13px; color: var(--cream); font-weight: 500; }
+.hotel-area { font-size: 11px; color: var(--text-dim); }
+
+/* =============================================
+   OTELLER
+   ============================================= */
+.hotel-group { margin-bottom: 28px; }
+.hotel-group-title { font-family: 'Cormorant Garamond', serif; font-size: 20px; font-style: italic; color: var(--gold-light); margin-bottom: 4px; }
+.hotel-group-sub { font-size: 11px; color: var(--text-dim); margin-bottom: 14px; letter-spacing: 1px; }
+.hotel-card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 16px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 14px; transition: all 0.3s ease; }
+.hotel-card:hover { border-color: var(--gold); transform: translateX(4px); box-shadow: -4px 0 20px rgba(201,168,76,0.1); }
+.hotel-tier { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; padding: 4px 10px; border-radius: 100px; border: 1px solid; white-space: nowrap; flex-shrink: 0; }
+.tier-premium { color:#c9a84c; border-color:#c9a84c; background:rgba(201,168,76,0.1); }
+.tier-mid     { color:#a0b0c0; border-color:#a0b0c0; background:rgba(160,176,192,0.1); }
+.tier-budget  { color:#7ec8a0; border-color:#7ec8a0; background:rgba(126,200,160,0.1); }
+.hotel-info { flex: 1; }
+.hotel-h-name { font-size: 14px; color: var(--cream); font-weight: 500; margin-bottom: 4px; }
+.hotel-h-desc { font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px; }
+.hotel-price { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--gold); }
+.hotel-price span { font-size: 11px; color: var(--text-dim); font-family: 'DM Sans', sans-serif; }
+.stars { color: var(--gold); font-size: 11px; letter-spacing: 1px; }
+.price-note { font-size: 10px; color: var(--text-dim); font-style: italic; margin-top: 6px; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: var(--radius-sm); border-left: 2px solid var(--gold); }
+
+/* =============================================
+   BÜTÇE
+   ============================================= */
+.budget-total { background: linear-gradient(135deg, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.05) 100%); border: 1px solid var(--gold); border-radius: var(--radius-lg); padding: 24px; text-align: center; margin-bottom: 24px; }
+.budget-total .b-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+.budget-total .b-amount { font-family: 'Cormorant Garamond', serif; font-size: 52px; font-weight: 300; color: var(--cream); line-height: 1; }
+.budget-total .b-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.budget-breakdown { display: flex; flex-direction: column; gap: 12px; }
+.budget-row { display: flex; align-items: center; gap: 12px; padding: 14px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); transition: all 0.3s ease; }
+.budget-row:hover { border-color: var(--gold); }
+.budget-icon { font-size: 22px; flex-shrink: 0; }
+.budget-label { flex: 1; font-size: 13px; color: var(--text-main); }
+.budget-detail { font-size: 11px; color: var(--text-dim); }
+.budget-amount { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--gold-light); text-align: right; }
+.budget-bar-wrap { height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.budget-bar { height: 100%; background: linear-gradient(to right, var(--gold), var(--gold-light)); border-radius: 2px; animation: barGrow 1.2s ease both; }
+@keyframes barGrow { from{width:0 !important} }
+.budget-note { margin-top: 16px; padding: 12px 16px; background: rgba(255,255,255,0.04); border-radius: var(--radius-sm); border-left: 2px solid var(--gold); font-size: 11px; color: var(--text-dim); line-height: 1.6; }
+
+/* =============================================
+   ALTERNATİFLER
+   ============================================= */
+.alt-card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px; transition: all 0.4s ease; animation: fadeSlideUp 0.5s ease both; cursor: pointer; }
+.alt-card:hover { border-color: var(--gold); box-shadow: var(--shadow-gold); transform: translateY(-3px); }
+.alt-icon { font-size: 36px; margin-bottom: 12px; }
+.alt-label { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 6px; }
+.alt-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-style: italic; color: var(--cream); margin-bottom: 10px; }
+.alt-desc { font-size: 12px; color: var(--text-dim); line-height: 1.7; margin-bottom: 14px; }
+.alt-stops { display: flex; flex-wrap: wrap; gap: 6px; }
+.alt-stop { font-size: 11px; color: var(--text-dim); background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 100px; padding: 3px 10px; display: flex; align-items: center; gap: 4px; }
+.alt-stop::before { content: '→'; color: var(--gold); font-size: 9px; }
+
+/* =============================================
+   GEZİ ÖZETİ
+   ============================================= */
+.trip-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+.ts-card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 4px; transition: all 0.3s ease; }
+.ts-card:hover { border-color: var(--gold); }
+.ts-icon { font-size: 24px; }
+.ts-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
+.ts-value { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--cream); }
+.vibe-card { background: linear-gradient(135deg, rgba(201,168,76,0.15), rgba(201,168,76,0.03)); border: 1px solid var(--gold); border-radius: var(--radius-lg); padding: 20px; text-align: center; }
+.vibe-emoji { font-size: 40px; margin-bottom: 10px; }
+.vibe-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-style: italic; color: var(--gold-light); margin-bottom: 8px; }
+.vibe-desc { font-size: 12px; color: var(--text-dim); line-height: 1.7; }
+.tip-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.tip-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: rgba(255,255,255,0.03); border-radius: var(--radius-sm); font-size: 12px; color: var(--text-dim); line-height: 1.5; border-left: 2px solid var(--gold); }
+.tip-emoji { flex-shrink: 0; font-size: 14px; }
+
+/* =============================================
+   MARKER & PULSE
+   ============================================= */
+.custom-marker { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; border: 2px solid; font-size: 16px; cursor: pointer; animation: markerPop 0.5s cubic-bezier(0.175,0.885,0.32,1.275) both; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+@keyframes markerPop { from{transform:scale(0) translateY(10px);opacity:0} to{transform:scale(1) translateY(0);opacity:1} }
+.marker-start  { background:rgba(201,168,76,0.9);  border-color:#fff;        color:#0d1b2a; }
+.marker-hotel  { background:rgba(126,200,160,0.85); border-color:#7ec8a0;     color:#0d1b2a; }
+.marker-scenic { background:rgba(100,149,237,0.85); border-color:#6495ed;     color:#fff; }
+.marker-food   { background:rgba(255,140,60,0.85);  border-color:#ff8c3c;     color:#fff; }
+.marker-main   { background:rgba(201,168,76,0.85);  border-color:var(--gold); color:#0d1b2a; }
+.pulse-ring { position: absolute; width: 50px; height: 50px; border-radius: 50%; background: rgba(201,168,76,0.2); animation: pulseRing 2s ease-out infinite; top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none; }
+@keyframes pulseRing { 0%{transform:translate(-50%,-50%) scale(0.8);opacity:0.8} 100%{transform:translate(-50%,-50%) scale(2);opacity:0} }
+
+/* =============================================
+   MOBİL
+   ============================================= */
+@media (max-width: 768px) {
+  .header { padding: 28px 20px 24px; }
+  .main-layout { grid-template-columns: 1fr; }
+  #map { height: 420px; min-height: 420px; position: relative; }
+  .sidebar { max-height: none; position: relative; border-left: none; border-top: 1px solid var(--glass-border); }
+  .summary-bar { grid-template-columns: repeat(2,1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     HEADER
+     ============================================================ -->
+<header class="header">
+  <div class="header-top">
+    <div>
+      <p class="trip-label">✦ Yol Gezisi Planlayıcı · Türkiye 2025</p>
+      <h1 class="trip-title">Ege <em>Kaçamağı</em></h1>
+      <p class="trip-subtitle">İstanbul'dan Ege Kıyılarına — Tarih, Zeytin Bahçeleri ve Deniz Kokusundan Geçen Sinematik Bir Sürüş</p>
+    </div>
+    <div class="trip-meta">
+      <div class="meta-pill"><span>📅</span> 27 – 31 Mayıs</div>
+      <div class="meta-pill"><span>🚗</span> Araçla</div>
+      <div class="meta-pill"><span>🗺️</span> 3 Gün Yolda</div>
+      <div class="meta-pill"><span>🇹🇷</span> Türkiye</div>
+    </div>
+  </div>
+  <div class="summary-bar">
+    <div class="summary-item">
+      <span class="s-label">Başlangıç Noktası</span>
+      <span class="s-value">İstanbul <em>Avrupa Yakası</em></span>
+    </div>
+    <div class="summary-item">
+      <span class="s-label">Toplam Mesafe</span>
+      <span class="s-value">~820 <em>km gidiş-dönüş</em></span>
+    </div>
+    <div class="summary-item">
+      <span class="s-label">Konaklama</span>
+      <span class="s-value">Assos <em>+ Ayvalık</em></span>
+    </div>
+    <div class="summary-item">
+      <span class="s-label">Dönüş</span>
+      <span class="s-value">31 Mayıs <em>akşamı</em></span>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================================
+     ANA DÜZEN — harita solda, kenar çubuğu sağda
+     ============================================================ -->
+<div class="main-layout">
+
+  <!-- HARİTA -->
+  <div class="map-section">
+    <!-- ✅ Harita div'i her zaman script'lerden önce gelmeli -->
+    <div id="map"></div>
+
+    <div class="route-status">
+      <div class="route-dot"></div>
+      Rota Aktif
+    </div>
+
+    <div class="map-legend">
+      <div class="legend-item"><div class="legend-dot" style="color:#c9a84c"></div>Başlangıç / Ana Durak</div>
+      <div class="legend-item"><div class="legend-dot" style="color:#7ec8a0"></div>Konaklama Bölgesi</div>
+      <div class="legend-item"><div class="legend-dot" style="color:#6495ed"></div>Manzara Durağı</div>
+      <div class="legend-item"><div class="legend-dot" style="color:#ff8c3c"></div>Yemek / Plaj Durağı</div>
+    </div>
+  </div>
+
+  <!-- KENAR ÇUBUĞU -->
+  <aside class="sidebar">
+    <nav class="sidebar-nav">
+      <button class="nav-tab active" onclick="showTab('rota',this)">Rota</button>
+      <button class="nav-tab" onclick="showTab('oteller',this)">Oteller</button>
+      <button class="nav-tab" onclick="showTab('butce',this)">Bütçe</button>
+      <button class="nav-tab" onclick="showTab('alternatif',this)">Altern.</button>
+      <button class="nav-tab" onclick="showTab('ozet',this)">Özet</button>
+    </nav>
+
+    <!-- ======== ROTA SEKMESİ ======== -->
+    <div id="tab-rota" class="tab-panel active">
+      <p class="panel-title">Günlük Program</p>
+      <p class="panel-sub">3 gün · Kalkış 27 Mayıs · Dönüş 31 Mayıs</p>
+
+      <!-- GÜN 1 -->
+      <div class="day-card">
+        <div class="day-header" onclick="toggleCard(this)">
+          <div class="day-number">01</div>
+          <div class="day-info">
+            <div class="day-date">Salı, 27 Mayıs</div>
+            <div class="day-route">İstanbul → Çanakkale → Assos</div>
+          </div>
+          <div class="day-stats">
+            <div class="stat-item">🛣️ <strong>~340 km</strong></div>
+            <div class="stat-item">⏱️ <strong>~5s sürüş</strong></div>
+            <div class="stat-item">🕗 <strong>08:00</strong>'de çık</div>
+          </div>
+        </div>
+        <div class="day-body">
+          <div class="section-label">Duraklar ve Öne Çıkanlar</div>
+          <ul class="stop-list">
+            <li class="stop-item" onclick="flyToMarker(0)">
+              <span class="stop-emoji">🏙️</span>
+              <div><div class="stop-name">İstanbul (Avrupa Yakası)</div>
+              <div class="stop-desc">Sabah erken O-7 ile trafiği geç. Yola çıkmadan önce depo doldur, bir simit al.</div></div>
+            </li>
+            <li class="stop-item" onclick="flyToMarker(2)">
+              <span class="stop-emoji">⚓</span>
+              <div><div class="stop-name">Çanakkale</div>
+              <div class="stop-desc">Boğaz kıyısında öğle molası. Tarihi merkezi gez, meşhur Truva Atı replikasını ziyaret et. 1–2 saat.</div></div>
+            </li>
+            <li class="stop-item" onclick="flyToMarker(3)">
+              <span class="stop-emoji">🏛️</span>
+              <div><div class="stop-name">Truva (Troya) — İsteğe Bağlı</div>
+              <div class="stop-desc">Çanakkale'ye 30 dk. UNESCO mirası antik şehir. +1.5 saat ekler, kesinlikle değer.</div></div>
+            </li>
+            <li class="stop-item" onclick="flyToMarker(4)">
+              <span class="stop-emoji">🫒</span>
+              <div><div class="stop-name">Assos / Behramkale</div>
+              <div class="stop-desc">Ege'ye bakan uçurum köyü, tepede Athena Tapınağı. Gün batımı sinematik. Bu gece konaklama.</div></div>
+            </li>
+          </ul>
+          <div class="section-label">Yemek Durakları</div>
+          <div class="food-chips">
+            <div class="food-chip">☕ Tekirdağ'da yol kenarı çay</div>
+            <div class="food-chip">🐟 Çanakkale'de balık ekmek</div>
+            <div class="food-chip">🫒 Assos'ta meze akşam yemeği</div>
+          </div>
+          <div class="section-label">Bu Gecelik Konaklama</div>
+          <div class="hotel-suggestion">
+            <div class="hotel-icon">🌙</div>
+            <div>
+              <div class="hotel-name">Assos / Behramkale Köyü</div>
+              <div class="hotel-area">Ege manzaralı butik taş oteller · ~$80–200/gece</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GÜN 2 -->
+      <div class="day-card">
+        <div class="day-header" onclick="toggleCard(this)">
+          <div class="day-number">02</div>
+          <div class="day-info">
+            <div class="day-date">Çarşamba, 28 Mayıs</div>
+            <div class="day-route">Assos → Adatepe → Kaz Dağları → Ayvalık</div>
+          </div>
+          <div class="day-stats">
+            <div class="stat-item">🛣️ <strong>~120 km</strong></div>
+            <div class="stat-item">⏱️ <strong>~2.5s sürüş</strong></div>
+            <div class="stat-item">🕙 <strong>10:00</strong>'da çık</div>
+          </div>
+        </div>
+        <div class="day-body">
+          <div class="section-label">Duraklar ve Öne Çıkanlar</div>
+          <ul class="stop-list">
+            <li class="stop-item" onclick="flyToMarker(5)">
+              <span class="stop-emoji">🌿</span>
+              <div><div class="stop-name">Adatepe Köyü</div>
+              <div class="stop-desc">Kaz Dağları eteklerinde taş köy. Zeytinyağıyla ünlü, sakin köy yaşamı. Kaldırım taşlarında yürüyün. 1 saat.</div></div>
+            </li>
+            <li class="stop-item" onclick="flyToMarker(6)">
+              <span class="stop-emoji">🌲</span>
+              <div><div class="stop-name">Kaz Dağları (İda Dağı)</div>
+              <div class="stop-desc">Mitolojinin kutsal dağı. Serin çam ormanları, şelaleler, patikalar. Nefes açıcı doğa yürüyüşü. 2 saat.</div></div>
+            </li>
+            <li class="stop-item" onclick="flyToMarker(7)">
+              <span class="stop-emoji">🏝️</span>
+              <div><div class="stop-name">Cunda Adası / Ayvalık</div>
+              <div class="stop-desc">Rum mimarisi, bougainvillea sokaklar, deniz ürünleri. Ege'nin incisi. Bu gece konaklama.</div></div>
+            </li>
+          </ul>
+          <div class="section-label">Yemek Durakları</div>
+          <div class="food-chips">
+            <div class="food-chip">🫒 Adatepe zeytinyağı tadımı</div>
+            <div class="food-chip">🌲 Kaz Dağları pikniği</div>
+            <div class="food-chip">🦐 Cunda'da balık lokantası</div>
+            <div class="food-chip">☕ Ayvalık tostu</div>
+          </div>
+          <div class="section-label">Bu Gecelik Konaklama</div>
+          <div class="hotel-suggestion">
+            <div class="hotel-icon">🌙</div>
+            <div>
+              <div class="hotel-name">Cunda Adası / Ayvalık</div>
+              <div class="hotel-area">Büyüleyici butik ve deniz manzaralı seçenekler · ~$60–160/gece</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GÜN 3 -->
+      <div class="day-card">
+        <div class="day-header" onclick="toggleCard(this)">
+          <div class="day-number">03</div>
+          <div class="day-info">
+            <div class="day-date">Perşembe, 29 Mayıs</div>
+            <div class="day-route">Ayvalık → Şeytan Sofrası → Dönüş</div>
+          </div>
+          <div class="day-stats">
+            <div class="stat-item">🛣️ <strong>~360 km</strong></div>
+            <div class="stat-item">⏱️ <strong>~5s sürüş</strong></div>
+            <div class="stat-item">🕗 <strong>09:00</strong>'da çık</div>
+          </div>
+        </div>
+        <div class="day-body">
+          <div class="section-label">Duraklar ve Öne Çıkanlar</div>
+          <ul class="stop-list">
+            <li class="stop-item" onclick="flyToMarker(8)">
+              <span class="stop-emoji">😈</span>
+              <div><div class="stop-name">Şeytan Sofrası</div>
+              <div class="stop-desc">Panoramik tepe seyir noktası. Yunan adaları (Midilli) görünür. Sabah ziyareti büyülü. 45 dk.</div></div>
+            </li>
+            <li class="stop-item" onclick="flyToMarker(9)">
+              <span class="stop-emoji">🌊</span>
+              <div><div class="stop-name">Sarımsaklı Plajı — İsteğe Bağlı</div>
+              <div class="stop-desc">Geniş kumlu plaj. Uzun yoldan önce son yüzme keyfi. Mayıs sonu berrak su. 1 saat.</div></div>
+            </li>
+            <li class="stop-item" onclick="flyToMarker(1)">
+              <span class="stop-emoji">🌉</span>
+              <div><div class="stop-name">İstanbul'a Dönüş</div>
+              <div class="stop-desc">D565/E90 ile kuzeye. Bursa'da isteğe bağlı kahve molası. Akşam trafiğinden önce varmaya çalış.</div></div>
+            </li>
+          </ul>
+          <div class="section-label">Dönüş Yolu Yemek Durakları</div>
+          <div class="food-chips">
+            <div class="food-chip">🫖 Ayvalık tostu kahvaltısı</div>
+            <div class="food-chip">🍖 Yolda Bursa döner</div>
+            <div class="food-chip">🌰 Yol kenarı kuruyemiş</div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /tab-rota -->
+
+    <!-- ======== OTELLER SEKMESİ ======== -->
+    <div id="tab-oteller" class="tab-panel">
+      <p class="panel-title">Otel Önerileri</p>
+      <p class="panel-sub">İki konaklama · Bütçeye göre seçenekler</p>
+      <p class="price-note">⚠️ Fiyatlar Mayıs 2025 için tahmini değerlerdir. Rezervasyon sitelerinden doğrulayın. Fiyatlar müsaitliğe göre değişir.</p><br>
+
+      <div class="hotel-group">
+        <div class="hotel-group-title">1. Gece — Assos / Behramkale</div>
+        <div class="hotel-group-sub">Ege'ye bakan uçurum köyü · 27 Mayıs</div>
+        <div class="hotel-card">
+          <div class="hotel-tier tier-premium">Butik</div>
+          <div class="hotel-info">
+            <div class="hotel-h-name">Assos Kervansaray Oteli</div>
+            <div class="hotel-h-desc">Antik limanda taş konak, deniz manzaralı teras, Osmanlı ruhuyla taş odalar. Romantik ve rafine.</div>
+            <div class="stars">★★★★★</div>
+            <div class="hotel-price">$160–220 <span>/ gece yaklaşık</span></div>
+          </div>
+        </div>
+        <div class="hotel-card">
+          <div class="hotel-tier tier-mid">Orta Bütçe</div>
+          <div class="hotel-info">
+            <div class="hotel-h-name">Hotel Assos Eden Gardens</div>
+            <div class="hotel-h-desc">Havuzlu bahçe oteli, ilgili personel, yerel ürünlerle zengin kahvaltı.</div>
+            <div class="stars">★★★★</div>
+            <div class="hotel-price">$80–120 <span>/ gece yaklaşık</span></div>
+          </div>
+        </div>
+        <div class="hotel-card">
+          <div class="hotel-tier tier-budget">Ekonomik</div>
+          <div class="hotel-info">
+            <div class="hotel-h-name">Assos Köyü Pansiyonu</div>
+            <div class="hotel-h-desc">Behramkale'de basit ama temiz aile pansiyonları. Ev yapımı kahvaltı.</div>
+            <div class="stars">★★★</div>
+            <div class="hotel-price">$35–65 <span>/ gece yaklaşık</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hotel-group">
+        <div class="hotel-group-title">2. Gece — Cunda Adası / Ayvalık</div>
+        <div class="hotel-group-sub">Rum adası atmosferi · 28 Mayıs</div>
+        <div class="hotel-card">
+          <div class="hotel-tier tier-premium">Butik</div>
+          <div class="hotel-info">
+            <div class="hotel-h-name">Mado Butik Otel (Cunda)</div>
+            <div class="hotel-h-desc">Cunda'da restore edilmiş Rum taş konağı, deniz manzarası, çatı terası, tasarım iç mekan.</div>
+            <div class="stars">★★★★★</div>
+            <div class="hotel-price">$120–180 <span>/ gece yaklaşık</span></div>
+          </div>
+        </div>
+        <div class="hotel-card">
+          <div class="hotel-tier tier-mid">Orta Bütçe</div>
+          <div class="hotel-info">
+            <div class="hotel-h-name">Ayvalık Termal &amp; Spa Oteli</div>
+            <div class="hotel-h-desc">Spa, havuz ve modern odalarla sahil oteli. Ayvalık ve Cunda için iyi bir üs.</div>
+            <div class="stars">★★★★</div>
+            <div class="hotel-price">$70–110 <span>/ gece yaklaşık</span></div>
+          </div>
+        </div>
+        <div class="hotel-card">
+          <div class="hotel-tier tier-budget">Ekonomik</div>
+          <div class="hotel-info">
+            <div class="hotel-h-name">Cunda Pansiyonu / B&amp;B</div>
+            <div class="hotel-h-desc">Cunda kıyısına yakın küçük aile pansiyonu. Sade odalar, mükemmel konum, yerel kahvaltı.</div>
+            <div class="stars">★★★</div>
+            <div class="hotel-price">$30–60 <span>/ gece yaklaşık</span></div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /tab-oteller -->
+
+    <!-- ======== BÜTÇE SEKMESİ ======== -->
+    <div id="tab-butce" class="tab-panel">
+      <p class="panel-title">Bütçe Tahmini</p>
+      <p class="panel-sub">2 kişi · orta bütçe · yaklaşık değerler</p>
+      <div class="budget-total">
+        <div class="b-label">Tahmini Toplam (2 Kişi)</div>
+        <div class="b-amount">€620</div>
+        <div class="b-sub">Seçimlere göre aralık: €480 – €820</div>
+      </div>
+      <div class="budget-breakdown">
+        <div class="budget-row">
+          <div class="budget-icon">⛽</div>
+          <div><div class="budget-label">Yakıt</div><div class="budget-detail">~820 km · ort. 8L/100km · ~₺35/L</div><div class="budget-bar-wrap"><div class="budget-bar" style="width:35%"></div></div></div>
+          <div><div class="budget-amount">€90</div></div>
+        </div>
+        <div class="budget-row">
+          <div class="budget-icon">🛏️</div>
+          <div><div class="budget-label">Konaklama</div><div class="budget-detail">2 gece · orta bütçe tahmini</div><div class="budget-bar-wrap"><div class="budget-bar" style="width:55%"></div></div></div>
+          <div><div class="budget-amount">€200</div></div>
+        </div>
+        <div class="budget-row">
+          <div class="budget-icon">🍽️</div>
+          <div><div class="budget-label">Yeme &amp; İçme</div><div class="budget-detail">3 gün · ~€25–40/kişi/gün</div><div class="budget-bar-wrap"><div class="budget-bar" style="width:50%"></div></div></div>
+          <div><div class="budget-amount">€180</div></div>
+        </div>
+        <div class="budget-row">
+          <div class="budget-icon">🛂</div>
+          <div><div class="budget-label">Otoyol &amp; Köprü Geçişleri</div><div class="budget-detail">O-7 otoyolu, olası Osmangazi Köprüsü</div><div class="budget-bar-wrap"><div class="budget-bar" style="width:20%"></div></div></div>
+          <div><div class="budget-amount">€45</div></div>
+        </div>
+        <div class="budget-row">
+          <div class="budget-icon">🎟️</div>
+          <div><div class="budget-label">Giriş Ücretleri</div><div class="budget-detail">Truva, tapınak, milli park</div><div class="budget-bar-wrap"><div class="budget-bar" style="width:18%"></div></div></div>
+          <div><div class="budget-amount">€40</div></div>
+        </div>
+        <div class="budget-row">
+          <div class="budget-icon">🛍️</div>
+          <div><div class="budget-label">Diğer (hediyelik, atıştırmalık)</div><div class="budget-detail">Zeytinyağı, yerel ürünler, kafeler</div><div class="budget-bar-wrap"><div class="budget-bar" style="width:15%"></div></div></div>
+          <div><div class="budget-amount">€65</div></div>
+        </div>
+      </div>
+      <div class="budget-note">
+        💡 <strong>Tasarruf İpuçları:</strong> Mayıs için erken rezervasyon yap. Otoyol indirimi için HGS/OGS etiket al (PTT veya online). Öğle yemeklerini lokantada ye. Ayvalık pazarında peynir, zeytin ve bal çok uygun fiyatlı.
+      </div>
+    </div><!-- /tab-butce -->
+
+    <!-- ======== ALTERNATİF ROTALAR ======== -->
+    <div id="tab-alternatif" class="tab-panel">
+      <p class="panel-title">Alternatif Rotalar</p>
+      <p class="panel-sub">Farklı temalar, aynı kalkış noktası</p>
+
+      <div class="alt-card">
+        <div class="alt-icon">🌊</div>
+        <div class="alt-label">Alternatif Rota A</div>
+        <div class="alt-title">Mavi Yolculuk — Deniz Odaklı Rota</div>
+        <div class="alt-desc">Dağları atla, doğrudan kıyı güzelliğine dal. Plaj zamanı, ada gezisi ve Ege mutfağı öncelikli. Denizi her şeyden çok sevenler için.</div>
+        <div class="alt-stops">
+          <div class="alt-stop">İstanbul</div><div class="alt-stop">Erdek / Bandırma</div>
+          <div class="alt-stop">Marmara Adası (feribot)</div><div class="alt-stop">Ayvalık</div>
+          <div class="alt-stop">Dikili Plajı</div><div class="alt-stop">Çanakkale'den dönüş</div>
+        </div>
+      </div>
+
+      <div class="alt-card">
+        <div class="alt-icon">🌿</div>
+        <div class="alt-label">Alternatif Rota B</div>
+        <div class="alt-title">Yeşil Kaçış — Doğa ve Yayla Rotası</div>
+        <div class="alt-desc">Kaz Dağları'nda daha fazla zaman. Balıkesir orman yolları, şelale yürüyüşleri ve sessiz dağ köyleri. Doğaseverler ve serin hava arayanlar için.</div>
+        <div class="alt-stops">
+          <div class="alt-stop">İstanbul</div><div class="alt-stop">Bursa (Uludağ)</div>
+          <div class="alt-stop">Balıkesir</div><div class="alt-stop">Kaz Dağları</div>
+          <div class="alt-stop">Adatepe</div><div class="alt-stop">Assos</div>
+          <div class="alt-stop">Kıyı yoluyla dönüş</div>
+        </div>
+      </div>
+
+      <div class="alt-card">
+        <div class="alt-icon">🍽️</div>
+        <div class="alt-label">Alternatif Rota C</div>
+        <div class="alt-title">Lezzet Rotası — Gastronomi Turu</div>
+        <div class="alt-desc">Yemek tutkunları için. Edremit zeytinyağı çiftlikleri, Foça balıkçı köyleri, Ayvalık pazar sabahları, Bozcaada şarap tadımı (4 güne uzarsa).</div>
+        <div class="alt-stops">
+          <div class="alt-stop">İstanbul</div><div class="alt-stop">Çanakkale</div>
+          <div class="alt-stop">Edremit (zeytinyağı)</div><div class="alt-stop">Ayvalık Pazarı</div>
+          <div class="alt-stop">Cunda (meze şöleni)</div><div class="alt-stop">Foça (isteğe bağlı)</div>
+          <div class="alt-stop">Dönüş</div>
+        </div>
+      </div>
+    </div><!-- /tab-alternatif -->
+
+    <!-- ======== GEZİ ÖZETİ ======== -->
+    <div id="tab-ozet" class="tab-panel">
+      <p class="panel-title">Gezi Özeti</p>
+      <p class="panel-sub">Büyük resme bir bakış</p>
+      <div class="trip-summary-grid">
+        <div class="ts-card"><div class="ts-icon">📅</div><div class="ts-label">Toplam Süre</div><div class="ts-value">5 gün</div></div>
+        <div class="ts-card"><div class="ts-icon">🛣️</div><div class="ts-label">Toplam Mesafe</div><div class="ts-value">~820 km</div></div>
+        <div class="ts-card"><div class="ts-icon">🏨</div><div class="ts-label">Konaklama</div><div class="ts-value">2 gece</div></div>
+        <div class="ts-card"><div class="ts-icon">🌡️</div><div class="ts-label">Mayıs Havası</div><div class="ts-value">22–28°C</div></div>
+        <div class="ts-card"><div class="ts-icon">🌊</div><div class="ts-label">Deniz Sıcaklığı</div><div class="ts-value">~19°C</div></div>
+        <div class="ts-card"><div class="ts-icon">⛽</div><div class="ts-label">Yakıt Molası</div><div class="ts-value">2–3 kez</div></div>
+      </div>
+      <div class="vibe-card">
+        <div class="vibe-emoji">🫒</div>
+        <div class="vibe-title">Yavaş Ege Ritmi</div>
+        <div class="vibe-desc">Bu gezi bir kontrol listesi yarışı değil. Kıvrımlı kıyı yolları, çam ve deniz tuzu kokusu, zamanın yavaşladığı eski taş köyler. Assos'taki gün batımına ya da Cunda kıyısındaki sabah çayına yetişin. Acele etmeyin.</div>
+      </div>
+      <div class="section-label" style="margin-top:20px">Pratik İpuçları</div>
+      <div class="tip-list">
+        <div class="tip-item"><div class="tip-emoji">🕗</div>1. gün sabah 08:00'den önce İstanbul'dan çık — O-7 otoyolundaki trafiği erkenden geç.</div>
+        <div class="tip-item"><div class="tip-emoji">💳</div>HGS/OGS etiketi al — Türk otoyollarında zaman ve para kazandırır. PTT veya online başvuru.</div>
+        <div class="tip-item"><div class="tip-emoji">🛒</div>Zeytinyağını doğrudan Adatepe veya Edremit üreticilerinden al — çok daha ucuz ve taze.</div>
+        <div class="tip-item"><div class="tip-emoji">📱</div>Kaz Dağları için çevrimdışı harita indir — dağlarda mobil sinyal zayıf olabilir.</div>
+        <div class="tip-item"><div class="tip-emoji">🌅</div>Assos Athena Tapınağı'ndan gün batımı kaçırılmaz. Park için saat 19:00'dan önce köye gel.</div>
+        <div class="tip-item"><div class="tip-emoji">🐐</div>Behramkale'ye inen yol dik ve dar — son 2 km'yi yavaş in.</div>
+      </div>
+    </div><!-- /tab-ozet -->
+
+  </aside>
+</div><!-- /main-layout -->
+
+<!-- ============================================================
+     ✅ LEAFLET JS — body'nin en sonunda, map div'inden sonra
+     Custom script Leaflet yüklendikten hemen sonra çalışır
+     ============================================================ -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ==============================================
+   HARİTA BAŞLATMA
+   Tüm koordinatlar aşağıda düzenlenebilir.
+   Format: [enlem, boylam]
+   ============================================== */
+
+// ✅ Harita başlatma — önerilen sözdizimi
+var map = L.map('map').setView([39.0, 35.0], 6);
+
+// ✅ OpenStreetMap döşeme katmanı
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıcıları'
+}).addTo(map);
+
+// ✅ Harita boyutunu düzelt
+setTimeout(function() {
+  map.invalidateSize();
+}, 300);
+
+/* ==============================================
+   DURAK VERİLERİ
+   Adı, koordinatı, tipi, emojiyi burada düzenle
+   ============================================== */
+var destinations = [
+  // INDEX 0 — Başlangıç
+  {
+    name: "İstanbul (Avrupa Yakası)",
+    coords: [41.012, 28.977],
+    type: "start",
+    emoji: "🏙️",
+    why: "Kalkış noktanız. O-7 otoyolundaki yoğunluğu geçmek için sabah erken yola çıkın. Depoyu doldurun, bir simit alın.",
+    time: "Kalkış noktası",
+    markerClass: "marker-start"
+  },
+  // INDEX 1 — Dönüş
+  {
+    name: "Dönüş: İstanbul",
+    coords: [41.010, 28.975],
+    type: "end",
+    emoji: "🔄",
+    why: "31 Mayıs'ta buraya dönüyorsunuz. Ayvalık'tan D565/E90 ile kuzeye gelin.",
+    time: "Dönüş günü",
+    markerClass: "marker-start"
+  },
+  // INDEX 2 — Çanakkale
+  {
+    name: "Çanakkale",
+    coords: [40.1553, 26.4142],
+    type: "main",
+    emoji: "⚓",
+    why: "Çanakkale Boğazı kıyısında liman kenti. Gelibolu tarihi, öğle yemeği için deniz ürünleri ve meşhur Truva Atı replikası.",
+    time: "2–3 saat",
+    markerClass: "marker-main"
+  },
+  // INDEX 3 — Truva
+  {
+    name: "Truva (Troya)",
+    coords: [39.9577, 26.2385],
+    type: "scenic",
+    emoji: "🏛️",
+    why: "UNESCO Dünya Mirası alanı. Efsanevi antik şehir ve büyüleyici kalıntılar. 1.5 saatlik detour'a kesinlikle değer.",
+    time: "1.5–2 saat",
+    markerClass: "marker-scenic"
+  },
+  // INDEX 4 — Assos
+  {
+    name: "Assos / Behramkale",
+    coords: [39.4898, 26.3383],
+    type: "hotel",
+    emoji: "🫒",
+    why: "Ege'ye bakan uçurumdaki antik köy, Athena Tapınağı ile taçlanmış. Gün batımı burada sinematik. Türkiye'nin en güzel köylerinden biri.",
+    time: "Konaklama · 3–4 saat keşif",
+    markerClass: "marker-hotel"
+  },
+  // INDEX 5 — Adatepe
+  {
+    name: "Adatepe Köyü",
+    coords: [39.5841, 26.5702],
+    type: "scenic",
+    emoji: "🌿",
+    why: "Kaz Dağları eteklerinde şirin taş köy. Olağanüstü zeytinyağıyla ünlü. Kaldırım taşlı sokaklarda yürüyün, yerel ürün tadın.",
+    time: "1–1.5 saat",
+    markerClass: "marker-scenic"
+  },
+  // INDEX 6 — Kaz Dağları
+  {
+    name: "Kaz Dağları (İda Dağı)",
+    coords: [39.7035, 26.8512],
+    type: "scenic",
+    emoji: "🌲",
+    why: "Yunan mitolojisinin kutsal dağı. Yoğun çam ormanları, serin hava, gizli şelaleler ve yürüyüş parkurları.",
+    time: "2–3 saat",
+    markerClass: "marker-scenic"
+  },
+  // INDEX 7 — Cunda / Ayvalık
+  {
+    name: "Cunda Adası / Ayvalık",
+    coords: [39.3247, 26.7028],
+    type: "hotel",
+    emoji: "🏝️",
+    why: "Korunmuş Rum mimarisi, bougainvillea sokaklar, taze deniz ürünleri ve mükemmel yerel peynir. Ege'nin incisi.",
+    time: "Konaklama · yarım gün keşif",
+    markerClass: "marker-hotel"
+  },
+  // INDEX 8 — Şeytan Sofrası
+  {
+    name: "Şeytan Sofrası",
+    coords: [39.3619, 26.6961],
+    type: "scenic",
+    emoji: "😈",
+    why: "Ayvalık üzerinde panoramik tepe seyir noktası. Yunan adaları (Midilli) görünür. Sabah saatlerinde büyülü bir atmosfer.",
+    time: "45 dakika – 1 saat",
+    markerClass: "marker-scenic"
+  },
+  // INDEX 9 — Sarımsaklı Plajı
+  {
+    name: "Sarımsaklı Plajı",
+    coords: [39.3032, 26.7261],
+    type: "food",
+    emoji: "🌊",
+    why: "Ayvalık yakınlarında geniş kumlu plaj. Mayıs sonunda berrak mavi su. Uzun dönüş yolundan önce son yüzme keyfi.",
+    time: "1–2 saat",
+    markerClass: "marker-food"
+  }
+];
+
+/* ==============================================
+   ÖZEL MARKERlar OLUŞTUR
+   ============================================== */
+function createCustomIcon(dest, index) {
+  var delayMs = 300 + index * 150;
+  var html = '<div class="custom-marker ' + dest.markerClass + '" style="animation-delay:' + delayMs + 'ms">' + dest.emoji + '</div>';
+  return L.divIcon({ html: html, className: '', iconSize: [38, 38], iconAnchor: [19, 19], popupAnchor: [0, -24] });
+}
+
+/* ==============================================
+   MARKERlari HARİTAYA EKLE
+   ============================================== */
+var markers = [];
+
+destinations.forEach(function(dest, index) {
+  var icon = createCustomIcon(dest, index);
+
+  var typeLabel = '📍 Ana Durak';
+  if (dest.type === 'hotel')  typeLabel = '🌙 Konaklama Bölgesi';
+  else if (dest.type === 'scenic') typeLabel = '📸 Manzara Durağı';
+  else if (dest.type === 'food')   typeLabel = '🍽️ Yemek / Plaj Durağı';
+
+  var popupContent =
+    '<div class="popup-inner">' +
+    '<span class="popup-emoji">' + dest.emoji + '</span>' +
+    '<div class="popup-type">' + typeLabel + '</div>' +
+    '<div class="popup-name">' + dest.name + '</div>' +
+    '<div class="popup-why">' + dest.why + '</div>' +
+    '<div class="popup-time">⏱️ ' + dest.time + '</div>' +
+    '</div>';
+
+  var popup = L.popup({ maxWidth: 270 }).setContent(popupContent);
+  var marker = L.marker(dest.coords, { icon: icon }).addTo(map).bindPopup(popup);
+  markers.push(marker);
+});
+
+/* ==============================================
+   ROTA ÇİZGİSİ VE ANİMASYON
+   routeOrder dizisini düzenleyerek rota sırasını değiştir
+   ============================================== */
+var routeOrder = [0, 2, 3, 4, 5, 6, 7, 8, 9, 1];
+var routeCoords = routeOrder.map(function(i) { return destinations[i].coords; });
+
+// Rota çizgisi — animasyonla doldurulacak
+var routeLine = L.polyline([], {
+  color: '#c9a84c',
+  weight: 4,
+  opacity: 0.9,
+  dashArray: '10, 7',
+  lineJoin: 'round'
+}).addTo(map);
+
+// ✅ Tam rotayı görünmez çiz ve haritayı otomatik sınırlara yakınlaştır
+var boundsLine = L.polyline(routeCoords, { opacity: 0 }).addTo(map);
+map.fitBounds(boundsLine.getBounds(), { padding: [50, 50] });
+boundsLine.remove();
+
+// Rota çizme animasyonu
+var pointIndex = 0;
+function animateRoute() {
+  if (pointIndex <= routeCoords.length) {
+    routeLine.setLatLngs(routeCoords.slice(0, pointIndex));
+    pointIndex++;
+    setTimeout(animateRoute, 130);
+  }
+}
+setTimeout(animateRoute, 900);
+
+/* ==============================================
+   MARKERa UÇ (güncaret kartlarından çağrılır)
+   ============================================== */
+function flyToMarker(index) {
+  map.flyTo(destinations[index].coords, 12, { duration: 1.4 });
+  setTimeout(function() { markers[index].openPopup(); }, 1500);
+}
+
+/* ==============================================
+   SEKME GEÇİŞİ
+   ============================================== */
+function showTab(tabId, btn) {
+  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelectorAll('.nav-tab').forEach(function(b) { b.classList.remove('active'); });
+  document.getElementById('tab-' + tabId).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ==============================================
+   AKORDİYON KARTI
+   ============================================== */
+function toggleCard(header) {
+  var body = header.nextElementSibling;
+  body.style.display = (body.style.display === 'none') ? 'block' : 'none';
+}
+
+// Tüm gün kartlarını açık başlat
+document.querySelectorAll('.day-body').forEach(function(b) { b.style.display = 'block'; });
+
+/* ==============================================
+   BAŞLANGIÇ MARKERi NABIZ EFEKTİ
+   ============================================== */
+setTimeout(function() {
+  var startEls = document.querySelectorAll('.custom-marker.marker-start');
+  if (startEls.length > 0) {
+    var pulse = document.createElement('div');
+    pulse.className = 'pulse-ring';
+    startEls[0].style.position = 'relative';
+    startEls[0].appendChild(pulse);
+  }
+}, 600);
+</script>
+</body>
+</html>
